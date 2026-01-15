@@ -1,0 +1,39 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+echo "Running SOPS pre-commit check for secrets/*.yaml..."
+
+FILES=$(git diff --cached --name-only --diff-filter=ACM | grep '^secrets/.*\.yaml$' || true)
+
+if [[ -z "$FILES" ]]; then
+    exit 0
+fi
+
+FAILED=()
+
+for FILE in $FILES; do
+    if git show ":$FILE" | grep -q "^sops:"; then
+        echo "[OK] $FILE is encrypted"
+    else
+        echo "[ERROR] $FILE is NOT encrypted!"
+        FAILED+=("$FILE")
+    fi
+done
+
+if (( ${#FAILED[@]} > 0 )); then
+    echo ""
+    echo "Commit rejected. The following files are not encrypted with SOPS:"
+    for f in "${FAILED[@]}"; do
+        echo "   - $f"
+    done
+    echo ""
+    echo "Encrypt with:"
+    echo "   sops -e -i <file>"
+    echo "Or encrypt all secrets with:"
+    echo "    ./encrypt-all-secrets.sh"
+    echo ""
+    exit 1
+fi
+
+exit 0
